@@ -1,0 +1,806 @@
+<html><head><base href="https://webgl.com/nodeexperiment/datascience">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Science Node Experiment</title>
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@600&display=swap" rel="stylesheet">
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    height: 100%;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  body {
+    background-color: #ffffff;
+    color: #333;
+  }
+  body.dark-mode {
+    background-color: #1a1a1a;
+    color: #f0f0f0;
+  }
+  body.anthropic-mode {
+    background-color: #fafaf8;
+    color: #333;
+  }
+  #container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 2;
+    transition: all 0.3s ease;
+  }
+  .anthropic-mode h1 {
+    font-family: 'Gabarito', sans-serif;
+    font-weight: 600;
+  }
+  #graph {
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+  }
+  #controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2;
+    display: flex;
+    gap: 10px;
+  }
+  #togglePainterly {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 2;
+    display: none;
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    opacity: 0.2;
+  }
+  #togglePainterly:hover {
+    opacity: 1;
+  }
+  #screenshot {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.9;
+  }
+  #screenshot:hover {
+    background-color: #e0e0e0;
+    opacity: 1;
+  }
+  button {
+    background-color: transparent;
+    border: 1px solid #333;
+    color: #333;
+    padding: 10px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 20px;
+  }
+  .dark-mode button {
+    border-color: #f0f0f0;
+    color: #f0f0f0;
+  }
+  .anthropic-mode button {
+    border-color: #333;
+    color: #333;
+  }
+  button:hover {
+    background-color: #333;
+    color: #fff;
+    transform: scale(1.05);
+  }
+  .dark-mode button:hover {
+    background-color: #f0f0f0;
+    color: #1a1a1a;
+  }
+  .anthropic-mode button:hover {
+    background-color: #db9885;
+    color: #fafaf8;
+  }
+  #search-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: flex;
+    gap: 10px;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  #search-input {
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #db9885;
+    border-radius: 20px;
+    outline: none;
+    width: 300px;
+  }
+  #search-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: rgba(219, 152, 133, 0.2);
+    border: 1px solid #db9885;
+    color: #333;
+    border-radius: 20px;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+  }
+  #search-button:hover {
+    background-color: rgba(219, 152, 133, 0.4);
+  }
+  #shakeNodes {
+    font-family: monospace;
+    font-size: 18px;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.4/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <div id="container">
+    <h1 id="title">DATA SCIENCE NODE EXPERIMENT</h1>
+    <div id="graph"></div>
+    <div id="controls">
+      <button id="regenerate">Regenerate</button>
+      <button id="darkModeToggle">Dark Mode</button>
+      <button id="shakeNodes">≈≈≈</button>
+      <button id="anthropicModeToggle">Anthropic Mode</button>
+    </div>
+    <button id="togglePainterly">🖌️</button>
+    <button id="screenshot">📷</button>
+    <div id="search-container">
+      <input type="text" id="search-input" placeholder="Enter search term...">
+      <button id="search-button">Search</button>
+    </div>
+  </div>
+
+  <audio id="shakeSound" src="https://webgl.com/nodeexperiment/datascience/shake_sound.mp3" preload="auto"></audio>
+  <audio id="newNodeSound" src="https://webgl.com/nodeexperiment/datascience/new_node_sound.mp3" preload="auto"></audio>
+
+  <script>
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const svg = d3.select("#graph")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    const defs = svg.append("defs");
+
+    const displacementFilter = defs.append("filter")
+      .attr("id", "displacementFilter");
+
+    displacementFilter.append("feTurbulence")
+      .attr("type", "turbulence")
+      .attr("baseFrequency", "0.01")
+      .attr("numOctaves", "3")
+      .attr("result", "turbulence");
+
+    displacementFilter.append("feDisplacementMap")
+      .attr("in2", "turbulence")
+      .attr("in", "SourceGraphic")
+      .attr("scale", "10")
+      .attr("xChannelSelector", "R")
+      .attr("yChannelSelector", "G");
+
+    displacementFilter.append("feGaussianBlur")
+      .attr("stdDeviation", "2");
+
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+        if (isAnthropicMode) {
+          handleAnthropicZoom(event.transform);
+        }
+      });
+
+    svg.call(zoom);
+
+    let nodes = [];
+    let links = [];
+    let nextNodeId = 0;
+    let isDarkMode = false;
+    let isAnthropicMode = false;
+    let isPainterlyMode = true;
+    let draggedNode = null;
+    let lastMousePosition = { x: 0, y: 0 };
+    let shakeIntensity = 0;
+    let zoomLevel = 0;
+    let isSearchMode = false;
+    let shakeCount = 0;
+    let lastSearchTerm = '';
+    let lastSearchResults = [];
+    let relatedWords = [];
+    let shouldShowNodeText = true;
+
+    async function createNode(x, y, name, parentNode = null) {
+      if (isAnthropicMode && !name && parentNode) {
+        name = getRandomRelatedWord();
+      }
+      const node = {
+        id: nextNodeId++,
+        name: name || `Node ${nextNodeId}`,
+        group: Math.floor(Math.random() * 5),
+        x: x || Math.random() * width,
+        y: y || Math.random() * height,
+        velocity: { x: 0, y: 0 },
+        mass: Math.random() * 0.5 + 0.5,
+        opacity: isSearchMode ? 0 : 1
+      };
+
+      if (isAnthropicMode && parentNode) {
+        const newRelatedWords = await fetchRelatedWords(parentNode.name);
+        relatedWords = [...new Set([...relatedWords, ...newRelatedWords])];
+      }
+
+      return node;
+    }
+
+    function generateRandomShape() {
+      const nodeCount = Math.floor(Math.random() * 30) + 20;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) / 4;
+
+      return Array.from({ length: nodeCount }, (_, i) => {
+        const angle = (i / nodeCount) * 2 * Math.PI;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        return createNode(x, y);
+      });
+    }
+
+    function generateLinks(nodes) {
+      const links = [];
+      nodes.forEach((source, i) => {
+        const targetCount = Math.floor(Math.random() * 3) + 1;
+        for (let j = 0; j < targetCount; j++) {
+          const target = nodes[(i + j + 1) % nodes.length];
+          links.push({ source: source.id, target: target.id });
+        }
+      });
+      return links;
+    }
+
+    let simulation;
+
+    async function updateGraph() {
+      nodes = await Promise.all(generateRandomShape());
+      links = generateLinks(nodes);
+
+      g.selectAll("*").remove();
+
+      simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(30))
+        .force("charge", d3.forceManyBody().strength(-30))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(5))
+        .alphaTarget(0.1)
+        .velocityDecay(0.1);
+
+      if (isAnthropicMode) {
+        shouldShowNodeText = false;
+      }
+
+      updateVisuals();
+    }
+
+    function updateVisuals() {
+      const link = g.selectAll("line")
+        .data(links)
+        .join("line")
+        .attr("stroke", isDarkMode ? "#4a4a4a" : (isAnthropicMode ? "#db9885" : "#e0e0e0"))
+        .attr("stroke-width", 0.5);
+
+      const node = g.selectAll("circle")
+        .data(nodes)
+        .join("circle")
+        .attr("r", 4)
+        .attr("fill", d => isAnthropicMode ? "#db9885" : d3.schemeCategory10[d.group])
+        .style("opacity", d => d.opacity)
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended))
+        .on("mouseover", handleMouseOver)
+        .on("mouseout", handleMouseOut);
+
+      const label = g.selectAll("text")
+        .data(nodes)
+        .join("text")
+        .attr("dx", 8)
+        .attr("dy", ".35em")
+        .text(d => (isAnthropicMode && isSearchMode && shouldShowNodeText) ? d.name : "")
+        .style("font-size", "10px")
+        .style("fill", isDarkMode ? "#f0f0f0" : "#333")
+        .style("opacity", d => d.opacity);
+
+      simulation.nodes(nodes);
+      simulation.force("link").links(links);
+
+      simulation.on("tick", () => {
+        applyShake();
+        checkNodeBounds();
+
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+        node
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+
+        label
+          .attr("x", d => d.x)
+          .attr("y", d => d.y);
+      });
+
+      svg.on("mousemove", handleMouseMove);
+
+      if (isAnthropicMode && isPainterlyMode) {
+        g.attr("filter", "url(#displacementFilter)");
+      } else {
+        g.attr("filter", null);
+      }
+    }
+
+    function handleMouseOver(event, d) {
+      d3.select(this).transition()
+        .duration(200)
+        .attr("r", 6);
+    }
+
+    function handleMouseOut(event, d) {
+      d3.select(this).transition()
+        .duration(200)
+        .attr("r", 4);
+    }
+
+    function handleMouseMove(event) {
+      const [mouseX, mouseY] = d3.pointer(event);
+      const sensitivity = isAnthropicMode && isPainterlyMode ? 100 : 50;
+
+      nodes.forEach(node => {
+        const dx = mouseX - node.x;
+        const dy = mouseY - node.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < sensitivity) {
+          const factor = 1 - distance / sensitivity;
+          node.vx -= dx * factor * 0.01;
+          node.vy -= dy * factor * 0.01;
+
+          if (isAnthropicMode && isPainterlyMode) {
+            node.vx += (Math.random() - 0.5) * 2;
+            node.vy += (Math.random() - 0.5) * 2;
+          }
+        }
+      });
+
+      simulation.alphaTarget(0.3).restart();
+    }
+
+    function applyShake() {
+      if (shakeIntensity > 0) {
+        nodes.forEach(node => {
+          node.velocity.x += (Math.random() - 0.5) * shakeIntensity;
+          node.velocity.y += (Math.random() - 0.5) * shakeIntensity;
+          node.x += node.velocity.x;
+          node.y += node.velocity.y;
+
+          node.velocity.x *= 0.9;
+          node.velocity.y *= 0.9;
+        });
+
+        shakeIntensity *= 0.95;
+        if (shakeIntensity < 0.1) shakeIntensity = 0;
+      }
+    }
+
+    function checkNodeBounds() {
+      const margin = 50;
+      nodes = nodes.filter(node => {
+        if (node.x < -margin || node.x > width + margin || node.y < -margin || node.y > height + margin) {
+          links = links.filter(link => link.source !== node && link.target !== node);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+      draggedNode = d;
+      lastMousePosition = { x: event.x, y: event.y };
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+
+      const dx = event.x - lastMousePosition.x;
+      const dy = event.y - lastMousePosition.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > 50) {
+        addNode(event.x, event.y, draggedNode);
+      }
+
+      // Check if the node is near the border and adjust the simulation
+      const borderThreshold = 100; // Distance from the border to trigger adjustment
+      if (event.x < borderThreshold || event.x > width - borderThreshold ||
+          event.y < borderThreshold || event.y > height - borderThreshold) {
+        makeMoreSpace(event.x, event.y);
+      }
+
+      lastMousePosition = { x: event.x, y: event.y };
+    }
+
+    function makeMoreSpace(x, y) {
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const factor = 1 - Math.min(distance / Math.max(width, height), 0.5);
+
+      nodes.forEach(node => {
+        if (node !== draggedNode) {
+          const nodeDx = node.x - centerX;
+          const nodeDy = node.y - centerY;
+          node.x += nodeDx * factor * 0.1;
+          node.y += nodeDy * factor * 0.1;
+        }
+      });
+
+      // Adjust the simulation forces
+      simulation.force("center", d3.forceCenter(centerX + dx * 0.2, centerY + dy * 0.2));
+      simulation.force("charge").strength(-30 - Math.abs(dx + dy) * 0.1);
+      simulation.alpha(0.3).restart();
+    }
+
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+      draggedNode = null;
+
+      // Reset simulation forces
+      simulation.force("center", d3.forceCenter(width / 2, height / 2));
+      simulation.force("charge").strength(-30);
+      simulation.alpha(0.3).restart();
+    }
+
+    async function addNode(x, y, parentNode = null) {
+      const newNode = await createNode(x, y, null, parentNode);
+      nodes.push(newNode);
+
+      const newLinks = nodes
+        .filter(() => Math.random() < 0.2)
+        .map(target => ({ source: newNode.id, target: target.id }));
+      links.push(...newLinks);
+
+      updateVisuals();
+      simulation.alpha(1).restart();
+
+      if (isSearchMode) {
+        d3.select(newNode)
+          .transition()
+          .duration(500)
+          .style("opacity", 1);
+      }
+
+      document.getElementById('newNodeSound').play();
+    }
+
+    function toggleDarkMode() {
+      isDarkMode = !isDarkMode;
+      isAnthropicMode = false;
+      document.body.classList.toggle('dark-mode');
+      document.body.classList.remove('anthropic-mode');
+      updateVisuals();
+      toggleSearchBar();
+      togglePainterlyButton();
+      updateTitle();
+    }
+
+    function toggleAnthropicMode() {
+      isAnthropicMode = !isAnthropicMode;
+      isDarkMode = false;
+      document.body.classList.toggle('anthropic-mode');
+      document.body.classList.remove('dark-mode');
+      updateVisuals();
+      toggleSearchBar();
+      togglePainterlyButton();
+      updateTitle();
+      if (isAnthropicMode) {
+        zoomLevel = 0;
+        svg.transition().duration(750).call(
+          zoom.transform,
+          d3.zoomIdentity,
+          d3.zoomTransform(svg.node()).invert([width / 2, height / 2])
+        );
+      } else {
+        g.selectAll("circle")
+          .style("opacity", 0)
+          .transition()
+          .duration(1000)
+          .style("opacity", 1);
+      }
+    }
+
+    function togglePainterly() {
+      isPainterlyMode = !isPainterlyMode;
+      updateVisuals();
+    }
+
+    function togglePainterlyButton() {
+      const togglePainterlyButton = document.getElementById('togglePainterly');
+      if (isAnthropicMode) {
+        togglePainterlyButton.style.display = 'block';
+      } else {
+        togglePainterlyButton.style.display = 'none';
+      }
+    }
+
+    function toggleSearchBar() {
+      const searchContainer = document.getElementById('search-container');
+      if (isAnthropicMode) {
+        searchContainer.style.opacity = '1';
+        searchContainer.style.pointerEvents = 'auto';
+      } else {
+        searchContainer.style.opacity = '0';
+        searchContainer.style.pointerEvents = 'none';
+      }
+    }
+
+    async function shakeNodes() {
+      shakeIntensity = 5;
+      simulation.alpha(1).restart();
+      document.getElementById('shakeSound').play();
+
+      shakeCount++;
+      if (shakeCount % 8 === 0) {
+        const parentNode = nodes[Math.floor(Math.random() * nodes.length)];
+        await addNode(parentNode.x + (Math.random() - 0.5) * 100, parentNode.y + (Math.random() - 0.5) * 100, parentNode);
+      }
+      if (shakeCount % 20 === 0) {
+        const centerNode = nodes[Math.floor(Math.random() * nodes.length)];
+        await createNewCluster(centerNode.x + (Math.random() - 0.5) * 100, centerNode.y + (Math.random() - 0.5) * 100);
+      }
+
+      if (isAnthropicMode && isSearchMode) {
+        g.selectAll("circle")
+          .transition()
+          .duration(300)
+          .style("opacity", 1);
+
+        g.selectAll("text")
+          .transition()
+          .duration(300)
+          .style("opacity", 1);
+      }
+    }
+
+    function handleAnthropicZoom(transform) {
+      const scale = transform.k;
+      const newZoomLevel = Math.floor(scale);
+      
+      if (newZoomLevel > zoomLevel) {
+        zoomLevel = newZoomLevel;
+        const [x, y] = d3.pointer(event, g.node());
+        createNewCluster(x, y);
+      }
+    }
+
+    async function createNewCluster(x, y) {
+      const clusterSize = Math.floor(Math.random() * 10) + 5;
+      const parentNode = nodes[Math.floor(Math.random() * nodes.length)];
+      const clusterNodes = await Promise.all(Array.from({ length: clusterSize }, async () => {
+        const offsetX = (Math.random() - 0.5) * 50;
+        const offsetY = (Math.random() - 0.5) * 50;
+        return createNode(x + offsetX, y + offsetY, null, parentNode);
+      }));
+      
+      nodes = nodes.concat(clusterNodes);
+      
+      clusterNodes.forEach(node => {
+        const newLinks = clusterNodes
+          .filter(target => target !== node && Math.random() < 0.3)
+          .map(target => ({ source: node.id, target: target.id }));
+        links = links.concat(newLinks);
+      });
+
+      updateVisuals();
+      simulation.alpha(1).restart();
+    }
+
+    async function fetchRelatedWords(term) {
+      try {
+        const response = await fetch(`https://api.datamuse.com/words?ml=${term}&max=20`);
+        const data = await response.json();
+        return data.map(item => item.word);
+      } catch (error) {
+        console.error('Error fetching related words:', error);
+        return [];
+      }
+    }
+
+    function getRandomRelatedWord() {
+      if (relatedWords.length === 0) {
+        return "Node";
+      }
+      const randomIndex = Math.floor(Math.random() * relatedWords.length);
+      return relatedWords[randomIndex];
+    }
+
+    async function performSearch() {
+      const searchTerm = document.getElementById('search-input').value;
+      if (!searchTerm) return;
+
+      isSearchMode = true;
+      lastSearchTerm = searchTerm;
+      shouldShowNodeText = true;
+
+      try {
+        const response = await fetch(`https://api.datamuse.com/words?ml=${searchTerm}&max=10`);
+        const data = await response.json();
+        lastSearchResults = data;
+
+        nodes = [];
+        links = [];
+
+        const centralNode = await createNode(width / 2, height / 2, searchTerm);
+        centralNode.opacity = 1;
+        nodes.push(centralNode);
+
+        relatedWords = await fetchRelatedWords(searchTerm);
+
+        for (let i = 0; i < data.length; i++) {
+          const word = data[i];
+          const angle = (i / data.length) * 2 * Math.PI;
+          const x = width / 2 + Math.cos(angle) * 300;
+          const y = height / 2 + Math.sin(angle) * 300;
+          const relatedNode = await createNode(x, y, word.word, centralNode);
+          relatedNode.opacity = 0;
+          nodes.push(relatedNode);
+          links.push({ source: centralNode.id, target: relatedNode.id });
+        }
+
+        simulation.force("link").distance(200);
+        simulation.force("charge").strength(-100);
+
+        updateVisuals();
+        simulation.alpha(1).restart();
+
+        g.selectAll("circle")
+          .transition()
+          .duration(1000)
+          .style("opacity", 1);
+
+        g.selectAll("text")
+          .transition()
+          .duration(1000)
+          .style("opacity", 1);
+
+      } catch (error) {
+        console.error('Error fetching search results:', error);
+      }
+    }
+
+    function lazyLoadNodes() {
+      if (isAnthropicMode && isSearchMode) {
+        g.selectAll("circle")
+          .filter(function() {
+            return d3.select(this).style("opacity") === "0";
+          })
+          .transition()
+          .duration(500)
+          .style("opacity", 1);
+
+        g.selectAll("text")
+          .filter(function() {
+            return d3.select(this).style("opacity") === "0";
+          })
+          .transition()
+          .duration(500)
+          .style("opacity", 1);
+      }
+    }
+
+    function takeScreenshot() {
+      html2canvas(document.body).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'node_experiment_screenshot.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    function updateTitle() {
+      const title = document.getElementById('title');
+      if (isAnthropicMode) {
+        title.textContent = 'ANTHROPIC MODE';
+        title.style.fontFamily = "'Gabarito', sans-serif";
+        title.style.fontWeight = "600";
+      } else {
+        title.textContent = 'DATA SCIENCE NODE EXPERIMENT';
+        title.style.fontFamily = "'Helvetica Neue', Arial, sans-serif";
+        title.style.fontWeight = "300";
+      }
+    }
+
+    // Initialize the graph
+    updateGraph();
+
+    document.getElementById("regenerate").addEventListener("click", updateGraph);
+    document.getElementById("darkModeToggle").addEventListener("click", toggleDarkMode);
+    document.getElementById("shakeNodes").addEventListener("click", shakeNodes);
+    document.getElementById("anthropicModeToggle").addEventListener("click", toggleAnthropicMode);
+    document.getElementById("togglePainterly").addEventListener("click", togglePainterly);
+    document.getElementById("search-button").addEventListener("click", performSearch);
+    document.getElementById("screenshot").addEventListener("click", takeScreenshot);
+
+    document.getElementById("search-input").addEventListener("keyup", function(event) {
+      if (event.key === "Enter" && isAnthropicMode) {
+        performSearch();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      svg.attr("width", width).attr("height", height);
+      simulation.force("center", d3.forceCenter(width / 2, height / 2));
+      simulation.alpha(1).restart();
+    });
+
+    toggleSearchBar();
+    togglePainterlyButton();
+
+    setInterval(lazyLoadNodes, 2000);
+  </script>
+</body></html>
